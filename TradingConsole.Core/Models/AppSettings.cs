@@ -38,6 +38,7 @@ namespace TradingConsole.Core.Models
 
     public class StrategySettings
     {
+        // --- MODIFIED: Renamed properties to match the XAML bindings ---
         public ObservableCollection<SignalDriver> TrendingBullDrivers { get; set; }
         public ObservableCollection<SignalDriver> TrendingBearDrivers { get; set; }
         public ObservableCollection<SignalDriver> RangeBoundBullishDrivers { get; set; }
@@ -47,6 +48,7 @@ namespace TradingConsole.Core.Models
 
         public StrategySettings()
         {
+            // --- MODIFIED: Populating the renamed properties ---
             TrendingBullDrivers = new ObservableCollection<SignalDriver>
             {
                 new SignalDriver("Confluence Momentum (Bullish)", 10),
@@ -172,6 +174,7 @@ namespace TradingConsole.Core.Models
         public decimal VwapUpperBandMultiplier { get; set; }
         public decimal VwapLowerBandMultiplier { get; set; }
 
+        // --- ADDED: New setting for Gamma threshold ---
         public decimal AtmGammaThreshold { get; set; }
 
 
@@ -219,6 +222,7 @@ namespace TradingConsole.Core.Models
             IvHistoryLength = 15;
             IvSpikeThreshold = 0.01m;
 
+            // --- ADDED: Default value for the new Gamma setting ---
             AtmGammaThreshold = 0.0015m;
 
             ObvMovingAveragePeriod = 20;

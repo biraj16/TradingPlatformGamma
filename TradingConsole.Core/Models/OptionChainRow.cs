@@ -38,6 +38,7 @@ namespace TradingConsole.Core.Models
         private decimal _oiChangePercent;
         private long _volume;
         private decimal _delta;
+        // --- ADDED: Backing fields for new greeks ---
         private decimal _gamma;
         private decimal _theta;
         private decimal _vega;
@@ -54,6 +55,7 @@ namespace TradingConsole.Core.Models
         public long Volume { get => _volume; set { _volume = value; OnPropertyChanged(nameof(Volume)); } }
         public decimal Delta { get => _delta; set { _delta = value; OnPropertyChanged(nameof(Delta)); } }
 
+        // --- ADDED: Public properties for Gamma, Theta, and Vega with change notification ---
         public decimal Gamma { get => _gamma; set { _gamma = value; OnPropertyChanged(nameof(Gamma)); } }
         public decimal Theta { get => _theta; set { _theta = value; OnPropertyChanged(nameof(Theta)); } }
         public decimal Vega { get => _vega; set { _vega = value; OnPropertyChanged(nameof(Vega)); } }

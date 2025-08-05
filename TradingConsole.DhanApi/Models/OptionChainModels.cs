@@ -83,6 +83,7 @@ namespace TradingConsole.DhanApi.Models
     public class Greeks : ObservableModel
     {
         private decimal _delta;
+        // --- ADDED: Properties for Theta, Gamma, and Vega ---
         private decimal _theta;
         private decimal _gamma;
         private decimal _vega;

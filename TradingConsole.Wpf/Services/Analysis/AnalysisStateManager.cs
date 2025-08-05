@@ -1,4 +1,5 @@
 ﻿// TradingConsole.Wpf/Services/Analysis/AnalysisStateManager.cs
+// --- MODIFIED: Added MarketPhase state management ---
 using System;
 using System.Collections.Generic;
 using TradingConsole.Core.Models;
@@ -6,8 +7,13 @@ using TradingConsole.Wpf.ViewModels;
 
 namespace TradingConsole.Wpf.Services.Analysis
 {
+    /// <summary>
+    /// Manages the various state dictionaries required for real-time market analysis.
+    /// This includes states for indicators, market profiles, IV, candles, and more.
+    /// </summary>
     public class AnalysisStateManager
     {
+        // --- NEW: Added state for the current market phase ---
         public MarketPhase CurrentMarketPhase { get; set; } = MarketPhase.PreOpen;
 
         public Dictionary<string, AnalysisResult> AnalysisResults { get; } = new();
@@ -38,49 +44,41 @@ namespace TradingConsole.Wpf.Services.Analysis
         private readonly List<TimeSpan> _timeframes = new()
         {
             TimeSpan.FromMinutes(1),
-            TimeSpan.FromMinutes(3),
+            TimeSpan.FromMinutes(3), // Added 3-min for OI analysis
             TimeSpan.FromMinutes(5),
             TimeSpan.FromMinutes(15)
         };
 
-        public void InitializeStateForInstrument(DashboardInstrument instrument)
+        public void InitializeStateForInstrument(string securityId, string symbol, string instrumentType)
         {
-            if (BackfilledInstruments.Contains(instrument.SecurityId)) return;
+            if (BackfilledInstruments.Contains(securityId)) return;
 
-            BackfilledInstruments.Add(instrument.SecurityId);
-            AnalysisResults[instrument.SecurityId] = new AnalysisResult
-            {
-                SecurityId = instrument.SecurityId,
-                Symbol = instrument.DisplayName,
-                InstrumentGroup = instrument.InstrumentType,
-                UnderlyingGroup = instrument.UnderlyingSymbol,
-                StrikePrice = instrument.StrikePrice,
-                OptionType = instrument.OptionType
-            };
-            TickAnalysisState[instrument.SecurityId] = (0, 0, new List<decimal>());
-            MultiTimeframeCandles[instrument.SecurityId] = new Dictionary<TimeSpan, List<Candle>>();
-            MultiTimeframePriceEmaState[instrument.SecurityId] = new Dictionary<TimeSpan, EmaState>();
-            MultiTimeframeVwapEmaState[instrument.SecurityId] = new Dictionary<TimeSpan, EmaState>();
-            MultiTimeframeRsiState[instrument.SecurityId] = new Dictionary<TimeSpan, RsiState>();
-            MultiTimeframeAtrState[instrument.SecurityId] = new Dictionary<TimeSpan, AtrState>();
-            MultiTimeframeObvState[instrument.SecurityId] = new Dictionary<TimeSpan, ObvState>();
-            IsInVolatilitySqueeze[instrument.SecurityId] = false;
+            BackfilledInstruments.Add(securityId);
+            AnalysisResults[securityId] = new AnalysisResult { SecurityId = securityId, Symbol = symbol, InstrumentGroup = instrumentType };
+            TickAnalysisState[securityId] = (0, 0, new List<decimal>());
+            MultiTimeframeCandles[securityId] = new Dictionary<TimeSpan, List<Candle>>();
+            MultiTimeframePriceEmaState[securityId] = new Dictionary<TimeSpan, EmaState>();
+            MultiTimeframeVwapEmaState[securityId] = new Dictionary<TimeSpan, EmaState>();
+            MultiTimeframeRsiState[securityId] = new Dictionary<TimeSpan, RsiState>();
+            MultiTimeframeAtrState[securityId] = new Dictionary<TimeSpan, AtrState>();
+            MultiTimeframeObvState[securityId] = new Dictionary<TimeSpan, ObvState>();
+            IsInVolatilitySqueeze[securityId] = false;
 
-            if (instrument.InstrumentType == "INDEX")
+            if (instrumentType == "INDEX")
             {
-                RelativeStrengthStates[instrument.SecurityId] = new RelativeStrengthState();
-                IvSkewStates[instrument.SecurityId] = new IvSkewState();
-                CustomLevelStates[instrument.Symbol] = new IntradayIvState.CustomLevelState();
+                RelativeStrengthStates[securityId] = new RelativeStrengthState();
+                IvSkewStates[securityId] = new IvSkewState();
+                CustomLevelStates[symbol] = new IntradayIvState.CustomLevelState();
             }
 
             foreach (var tf in _timeframes)
             {
-                MultiTimeframeCandles[instrument.SecurityId][tf] = new List<Candle>();
-                MultiTimeframePriceEmaState[instrument.SecurityId][tf] = new EmaState();
-                MultiTimeframeVwapEmaState[instrument.SecurityId][tf] = new EmaState();
-                MultiTimeframeRsiState[instrument.SecurityId][tf] = new RsiState();
-                MultiTimeframeAtrState[instrument.SecurityId][tf] = new AtrState();
-                MultiTimeframeObvState[instrument.SecurityId][tf] = new ObvState();
+                MultiTimeframeCandles[securityId][tf] = new List<Candle>();
+                MultiTimeframePriceEmaState[securityId][tf] = new EmaState();
+                MultiTimeframeVwapEmaState[securityId][tf] = new EmaState();
+                MultiTimeframeRsiState[securityId][tf] = new RsiState();
+                MultiTimeframeAtrState[securityId][tf] = new AtrState();
+                MultiTimeframeObvState[securityId][tf] = new ObvState();
             }
         }
 

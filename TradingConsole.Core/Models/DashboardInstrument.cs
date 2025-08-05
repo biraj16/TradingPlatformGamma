@@ -1,6 +1,5 @@
 ﻿// In TradingConsole.Core/Models/DashboardInstrument.cs
 using System;
-using TradingConsole.DhanApi.Models;
 
 namespace TradingConsole.Core.Models
 {
@@ -12,13 +11,13 @@ namespace TradingConsole.Core.Models
         public string UnderlyingSymbol { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
 
+        // --- ADDED: Property to store the precise instrument type ---
         public string InstrumentType { get; set; } = string.Empty;
 
+        // --- ADDED: Specific properties for options/futures for more reliable lookups ---
         public decimal StrikePrice { get; set; }
         public string OptionType { get; set; } = string.Empty;
         public DateTime? ExpiryDate { get; set; }
-
-        public Greeks? Greeks { get; set; }
 
 
         private long _openInterest;

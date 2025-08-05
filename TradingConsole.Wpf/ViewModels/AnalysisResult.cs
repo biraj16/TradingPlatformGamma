@@ -3,31 +3,35 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using TradingConsole.Core.Models;
-using TradingConsole.DhanApi.Models;
 using TradingConsole.Wpf.Services;
 
 namespace TradingConsole.Wpf.ViewModels
 {
     public class AnalysisResult : ObservableModel
     {
+        /// <summary>
+        /// --- REFACTORED: This method now uses reflection to update properties. ---
+        /// This is more robust and maintainable than manually assigning each property.
+        /// It automatically handles any new properties added to the class.
+        /// </summary>
+        /// <param name="source">The source object with the latest analysis data.</param>
         public void Update(AnalysisResult source)
         {
+            // Get all public instance properties of the AnalysisResult class.
             PropertyInfo[] properties = typeof(AnalysisResult).GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
             foreach (var property in properties)
             {
+                // Ensure the property can be written to and is not an indexed property.
                 if (property.CanWrite && property.GetIndexParameters().Length == 0)
                 {
+                    // Get the value from the source object.
                     var value = property.GetValue(source);
+                    // Set the value on the current (destination) object.
                     property.SetValue(this, value);
                 }
             }
         }
-
-        public decimal StrikePrice { get; set; }
-        public string OptionType { get; set; } = string.Empty;
-        public Greeks? Greeks { get; set; }
-
 
         private bool _isExpanded;
         public bool IsExpanded { get => _isExpanded; set => SetProperty(ref _isExpanded, value); }
@@ -214,12 +218,14 @@ namespace TradingConsole.Wpf.ViewModels
         private string _volatilityStateSignal = "N/A";
         public string VolatilityStateSignal { get => _volatilityStateSignal; set => SetProperty(ref _volatilityStateSignal, value); }
 
+        // --- NEW PROPERTIES ---
         private string _marketRegime = "N/A";
         public string MarketRegime { get => _marketRegime; set => SetProperty(ref _marketRegime, value); }
 
         private string _intradayIvSpikeSignal = "N/A";
         public string IntradayIvSpikeSignal { get => _intradayIvSpikeSignal; set => SetProperty(ref _intradayIvSpikeSignal, value); }
 
+        // --- ADDED: Property to hold the Gamma signal ---
         private string _gammaSignal = "N/A";
         public string GammaSignal { get => _gammaSignal; set => SetProperty(ref _gammaSignal, value); }
 

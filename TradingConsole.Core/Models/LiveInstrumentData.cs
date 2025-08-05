@@ -13,6 +13,7 @@ namespace TradingConsole.Core.Models
         private long _volume;
         private decimal _change;
         private decimal _changePercent;
+        // ADDED: Missing properties that were previously in DashboardInstrument
         private int _lastTradedQuantity;
         private int _lastTradeTime;
         private decimal _avgTradePrice;

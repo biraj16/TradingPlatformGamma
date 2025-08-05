@@ -1,5 +1,5 @@
 ﻿// TradingConsole.Wpf/Services/Analysis/ThesisSynthesizer.cs
-// --- MODIFIED: Integrated the new Gamma signal into the conviction score ---
+// --- MODIFIED: Added a strategic trend filter based on user's trading experience ---
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -133,7 +133,6 @@ namespace TradingConsole.Wpf.Services
             int structureScore = 0;
             int momentumScore = 0;
             int confirmationScore = 0;
-            int volatilityScore = 0; // --- NEW: Score for volatility signals ---
 
             if (r.MarketStructure == "Trending Up") structureScore += 3;
             if (r.MarketStructure == "Trending Down") structureScore -= 3;
@@ -151,31 +150,21 @@ namespace TradingConsole.Wpf.Services
             if (r.VolumeSignal == "Volume Burst" && r.LTP < r.Vwap) confirmationScore -= 2;
             if (r.OiSignal == "Long Buildup") confirmationScore += 2;
             if (r.OiSignal == "Short Buildup") confirmationScore -= 2;
-
-            // --- NEW: Add Gamma signal to the score ---
-            if (r.GammaSignal == "High Gamma Environment")
-            {
-                // High gamma benefits both sides, it just means a big move is likely.
-                // We add it to the side that momentum is currently favoring.
-                if (momentumScore > 0) volatilityScore += 3;
-                if (momentumScore < 0) volatilityScore -= 3;
-            }
-
-            if (r.IntradayIvSpikeSignal == "IV Spike Up") volatilityScore += 1;
+            if (r.IntradayIvSpikeSignal == "IV Spike Up") confirmationScore += 1;
+            if (r.GammaSignal == "High OTM Call Gamma") confirmationScore += 2;
+            if (r.GammaSignal == "High OTM Put Gamma") confirmationScore -= 2;
 
 
             bool isChoppy = (Math.Abs(structureScore) < 2 && Math.Abs(momentumScore) < 2) ||
                             (structureScore > 2 && momentumScore < -2) ||
-                            (structureScore < -2 && momentumScore > 2);
+                            (structureScore < -2 && momentumScore > 2) ||
+                            (r.GammaSignal == "Balanced OTM Gamma");
 
-            int finalScore = structureScore + momentumScore + confirmationScore + volatilityScore;
+            int finalScore = structureScore + momentumScore + confirmationScore;
 
             if (structureScore > 0) bullDrivers.Add($"Structure Bullish (+{structureScore})"); else if (structureScore < 0) bearDrivers.Add($"Structure Bearish ({structureScore})");
             if (momentumScore > 0) bullDrivers.Add($"Momentum Bullish (+{momentumScore})"); else if (momentumScore < 0) bearDrivers.Add($"Momentum Bearish ({momentumScore})");
             if (confirmationScore > 0) bullDrivers.Add($"Confirmation Bullish (+{confirmationScore})"); else if (confirmationScore < 0) bearDrivers.Add($"Confirmation Bearish ({confirmationScore})");
-            // --- NEW: Add volatility driver to the list ---
-            if (volatilityScore > 0) bullDrivers.Add($"Volatility Favorable (+{volatilityScore})"); else if (volatilityScore < 0) bearDrivers.Add($"Volatility Favorable ({volatilityScore})");
-
 
             return (bullDrivers, bearDrivers, finalScore, isChoppy);
         }

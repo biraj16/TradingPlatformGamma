@@ -201,7 +201,7 @@ namespace TradingConsole.Wpf.ViewModels
 
             _performanceService = new PerformanceService(Portfolio);
 
-            _analysisService = new AnalysisService(Settings, _apiClient, _scripMasterService, _historicalIvService, _marketProfileService, _indicatorStateService, _signalLoggerService, _notificationService, Dashboard);
+            _analysisService = new AnalysisService(Settings, _apiClient, _scripMasterService, _historicalIvService, _marketProfileService, _indicatorStateService, _signalLoggerService, _notificationService, Dashboard, this);
 
             _autoTraderService = new AutoTraderService(this, _scripMasterService, _apiClient, Settings, _notificationService);
             _analysisService.OnAnalysisUpdated += OnAnalysisResultUpdated;
@@ -1040,7 +1040,6 @@ namespace TradingConsole.Wpf.ViewModels
                         if (_optionChainCache.TryGetValue(packet.SecurityId, out var cachedOptionData))
                         {
                             instrumentToUpdate.ImpliedVolatility = cachedOptionData.ImpliedVolatility;
-                            instrumentToUpdate.Greeks = cachedOptionData.Greeks;
                         }
 
                         decimal underlyingLtp = 0;
@@ -1393,7 +1392,7 @@ namespace TradingConsole.Wpf.ViewModels
                             FeedType = FeedTypeQuote,
                             SegmentId = optionSegmentId,
                             UnderlyingSymbol = scripMasterUnderlying,
-                            InstrumentType = ceInfo.InstrumentType,
+                            InstrumentType = peInfo.InstrumentType,
                             StrikePrice = peInfo.StrikePrice,
                             OptionType = peInfo.OptionType,
                             ExpiryDate = ceInfo.ExpiryDate
@@ -1579,6 +1578,7 @@ namespace TradingConsole.Wpf.ViewModels
                                     rowToUpdate.CallOption.Volume = strikeData.CallOption.Volume;
                                     rowToUpdate.CallOption.IV = strikeData.CallOption.ImpliedVolatility;
                                     rowToUpdate.CallOption.Delta = strikeData.CallOption.Greeks?.Delta ?? 0;
+                                    // --- ADDED: Update new greeks on refresh ---
                                     rowToUpdate.CallOption.Gamma = strikeData.CallOption.Greeks?.Gamma ?? 0;
                                     rowToUpdate.CallOption.Theta = strikeData.CallOption.Greeks?.Theta ?? 0;
                                     rowToUpdate.CallOption.Vega = strikeData.CallOption.Greeks?.Vega ?? 0;
@@ -1592,6 +1592,7 @@ namespace TradingConsole.Wpf.ViewModels
                                     rowToUpdate.PutOption.Volume = strikeData.PutOption.Volume;
                                     rowToUpdate.PutOption.IV = strikeData.PutOption.ImpliedVolatility;
                                     rowToUpdate.PutOption.Delta = strikeData.PutOption.Greeks?.Delta ?? 0;
+                                    // --- ADDED: Update new greeks on refresh ---
                                     rowToUpdate.PutOption.Gamma = strikeData.PutOption.Greeks?.Gamma ?? 0;
                                     rowToUpdate.PutOption.Theta = strikeData.PutOption.Greeks?.Theta ?? 0;
                                     rowToUpdate.PutOption.Vega = strikeData.PutOption.Greeks?.Vega ?? 0;
@@ -1658,6 +1659,7 @@ namespace TradingConsole.Wpf.ViewModels
                 OiChangePercent = apiData.OiChangePercent,
                 Volume = apiData.Volume,
                 Delta = apiData.Greeks?.Delta ?? 0,
+                // --- ADDED: Map the new greeks from the API response to the core model ---
                 Gamma = apiData.Greeks?.Gamma ?? 0,
                 Theta = apiData.Greeks?.Theta ?? 0,
                 Vega = apiData.Greeks?.Vega ?? 0

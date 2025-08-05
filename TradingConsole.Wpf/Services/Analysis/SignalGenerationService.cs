@@ -1,4 +1,5 @@
 ﻿// TradingConsole.Wpf/Services/Analysis/SignalGenerationService.cs
+// --- MODIFIED: Added ATR and OBV signal calculations ---
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,13 +24,8 @@ namespace TradingConsole.Wpf.Services
             _indicatorService = indicatorService;
         }
 
-        public void GenerateAllSignals(DashboardInstrument instrument, DashboardInstrument instrumentForAnalysis, AnalysisResult result)
+        public void GenerateAllSignals(DashboardInstrument instrument, DashboardInstrument instrumentForAnalysis, AnalysisResult result, System.Collections.ObjectModel.ObservableCollection<OptionChainRow> optionChain)
         {
-            if (instrument.InstrumentType.StartsWith("OPT"))
-            {
-                result.Greeks = instrument.Greeks;
-            }
-
             // VWAP calculation
             var tickState = _stateManager.TickAnalysisState[instrumentForAnalysis.SecurityId];
             tickState.cumulativePriceVolume += instrumentForAnalysis.AvgTradePrice * instrumentForAnalysis.LastTradedQuantity;
@@ -96,6 +92,7 @@ namespace TradingConsole.Wpf.Services
                 result.RsiSignal5Min = _indicatorService.DetectRsiDivergence(fiveMinCandles, rsiState, _settingsViewModel.RsiDivergenceLookback);
             }
 
+            // --- FIX: Added ATR and OBV calculations ---
             if (oneMinCandles != null && oneMinCandles.Any())
             {
                 var atrState = _stateManager.MultiTimeframeAtrState[instrumentForAnalysis.SecurityId][TimeSpan.FromMinutes(1)];
@@ -139,8 +136,61 @@ namespace TradingConsole.Wpf.Services
             result.VolatilityStateSignal = GenerateVolatilityStateSignal(instrumentForAnalysis, result);
 
             result.IntradayIvSpikeSignal = CalculateIntradayIvSpikeSignal(instrument);
+            result.GammaSignal = CalculateGammaSignal(instrument, result.LTP, optionChain);
+        }
 
-            result.GammaSignal = CalculateGammaSignal(instrument);
+        private string CalculateGammaSignal(DashboardInstrument instrument, decimal underlyingPrice, System.Collections.ObjectModel.ObservableCollection<OptionChainRow> optionChain)
+        {
+            // Only run this analysis for the main indices that have an option chain view
+            if (instrument.InstrumentType != "INDEX" || optionChain == null || !optionChain.Any())
+            {
+                return "N/A";
+            }
+
+            // 1. Find the ATM strike and its index in the sorted list
+            var sortedStrikes = optionChain.OrderBy(r => r.StrikePrice).ToList();
+            var atmStrike = sortedStrikes.OrderBy(r => Math.Abs(r.StrikePrice - underlyingPrice)).FirstOrDefault();
+            if (atmStrike == null) return "N/A";
+
+            int atmIndex = sortedStrikes.IndexOf(atmStrike);
+
+            // 2. Select the 4 OTM strikes for calls (higher strikes) and puts (lower strikes)
+            const int otmCount = 4;
+            var otmCallStrikes = sortedStrikes.Skip(atmIndex + 1).Take(otmCount).ToList();
+            var otmPutStrikes = sortedStrikes.Take(atmIndex).Reverse().Take(otmCount).ToList();
+
+            if (otmCallStrikes.Count < otmCount || otmPutStrikes.Count < otmCount)
+            {
+                return "Insufficient OTM Strikes";
+            }
+
+            // 3. Sum the gamma for these strikes
+            decimal totalOtmCallGamma = otmCallStrikes.Sum(s => s.CallOption?.Gamma ?? 0);
+            decimal totalOtmPutGamma = otmPutStrikes.Sum(s => s.PutOption?.Gamma ?? 0);
+
+            // 4. Compare and generate the signal
+            decimal difference = totalOtmCallGamma - totalOtmPutGamma;
+            decimal totalGamma = totalOtmCallGamma + totalOtmPutGamma;
+            decimal ratio = totalGamma > 0 ? Math.Abs(difference) / totalGamma : 0;
+
+            if (ratio > 0.5m) // If one side has more than 75% of the total gamma ( (X-Y)/(X+Y) > 0.5 => X > 3Y )
+            {
+                if (totalOtmCallGamma > totalOtmPutGamma)
+                {
+                    return "High OTM Call Gamma"; // Potential for upward gamma squeeze
+                }
+                else
+                {
+                    return "High OTM Put Gamma"; // Potential for downward gamma squeeze
+                }
+            }
+
+            if (totalOtmCallGamma > _settingsViewModel.AtmGammaThreshold && totalOtmPutGamma > _settingsViewModel.AtmGammaThreshold)
+            {
+                return "Balanced OTM Gamma"; // Both sides have significant gamma
+            }
+
+            return "Neutral";
         }
 
         public void UpdateIvMetrics(DashboardInstrument instrument, decimal underlyingPrice)
@@ -172,49 +222,6 @@ namespace TradingConsole.Wpf.Services
         }
 
         #region Signal Calculation Logic
-
-        private string CalculateGammaSignal(DashboardInstrument instrument)
-        {
-            if (instrument.InstrumentType != "INDEX") return "N/A";
-
-            var allOptionsForIndex = _stateManager.AnalysisResults.Values
-                .Where(r => r.InstrumentGroup == "OPTIDX" && r.UnderlyingGroup == instrument.Symbol && r.StrikePrice > 0)
-                .ToList();
-
-            if (!allOptionsForIndex.Any()) return "N/A";
-
-            decimal atmStrike = allOptionsForIndex
-                .OrderBy(o => Math.Abs(o.StrikePrice - instrument.LTP))
-                .FirstOrDefault()?.StrikePrice ?? 0;
-
-            if (atmStrike == 0) return "N/A";
-
-            var otmCalls = allOptionsForIndex
-                .Where(o => o.OptionType == "CE" && o.StrikePrice > atmStrike)
-                .OrderBy(o => o.StrikePrice)
-                .Skip(2)
-                .Take(2);
-
-            var otmPuts = allOptionsForIndex
-                .Where(o => o.OptionType == "PE" && o.StrikePrice < atmStrike)
-                .OrderByDescending(o => o.StrikePrice)
-                .Skip(2)
-                .Take(2);
-
-            var selectedOptions = otmCalls.Concat(otmPuts).ToList();
-
-            if (!selectedOptions.Any()) return "Normal Gamma";
-
-            decimal avgGamma = selectedOptions.Average(o => o.Greeks?.Gamma ?? 0);
-
-            if (avgGamma > _settingsViewModel.AtmGammaThreshold)
-            {
-                return "High Gamma Environment";
-            }
-
-            return "Normal Gamma";
-        }
-
 
         private string CalculateOiSignal(List<Candle> candles)
         {

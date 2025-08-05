@@ -1,4 +1,5 @@
 ﻿// TradingConsole.Wpf/Services/AnalysisService.cs
+// --- MODIFIED: Correctly passed the IndicatorService dependency ---
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -31,11 +32,12 @@ namespace TradingConsole.Wpf.Services
         private readonly ThesisSynthesizer _thesisSynthesizer;
         private readonly Dictionary<string, DashboardInstrument> _instrumentCache = new();
         private readonly Dictionary<string, DateTime> _nearestExpiryDates = new();
+        private readonly MainViewModel _mainViewModel;
         public event Action<AnalysisResult>? OnAnalysisUpdated;
         public event Action<string, Candle, TimeSpan>? CandleUpdated;
         #endregion
 
-        public AnalysisService(SettingsViewModel settingsViewModel, DhanApiClient apiClient, ScripMasterService scripMasterService, HistoricalIvService historicalIvService, MarketProfileService marketProfileService, IndicatorStateService indicatorStateService, SignalLoggerService signalLoggerService, NotificationService notificationService, DashboardViewModel dashboardViewModel)
+        public AnalysisService(SettingsViewModel settingsViewModel, DhanApiClient apiClient, ScripMasterService scripMasterService, HistoricalIvService historicalIvService, MarketProfileService marketProfileService, IndicatorStateService indicatorStateService, SignalLoggerService signalLoggerService, NotificationService notificationService, DashboardViewModel dashboardViewModel, MainViewModel mainViewModel)
         {
             _settingsViewModel = settingsViewModel;
             _apiClient = apiClient;
@@ -46,6 +48,7 @@ namespace TradingConsole.Wpf.Services
             _indicatorService = new IndicatorService(_stateManager);
             _signalGenerationService = new SignalGenerationService(_stateManager, settingsViewModel, historicalIvService, _indicatorService);
             _thesisSynthesizer = new ThesisSynthesizer(settingsViewModel, signalLoggerService, notificationService, _stateManager);
+            _mainViewModel = mainViewModel;
         }
 
         private void UpdateMarketPhase()
@@ -138,7 +141,7 @@ namespace TradingConsole.Wpf.Services
 
             DashboardInstrument instrumentForAnalysis = GetInstrumentForVolumeAnalysis(instrument);
 
-            _signalGenerationService.GenerateAllSignals(instrument, instrumentForAnalysis, result);
+            _signalGenerationService.GenerateAllSignals(instrument, instrumentForAnalysis, result, _mainViewModel.OptionChainRows);
 
             if (newCandleFormed)
             {
@@ -151,23 +154,7 @@ namespace TradingConsole.Wpf.Services
 
         #region Boilerplate and other methods
         private bool IsMarketOpen() { try { var istZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"); var istNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, istZone); if (istNow.DayOfWeek == DayOfWeek.Saturday || istNow.DayOfWeek == DayOfWeek.Sunday) return false; if (_settingsViewModel.MarketHolidays.Contains(istNow.Date)) return false; var marketOpen = new TimeSpan(9, 15, 0); var marketClose = new TimeSpan(15, 30, 0); if (istNow.TimeOfDay < marketOpen || istNow.TimeOfDay > marketClose) return false; return true; } catch (TimeZoneNotFoundException) { Debug.WriteLine("WARNING: India Standard Time zone not found."); var now = DateTime.UtcNow; if (now.DayOfWeek == DayOfWeek.Saturday || now.DayOfWeek == DayOfWeek.Sunday) return false; return true; } }
-
-        private void InitializeNewInstrument(DashboardInstrument instrument)
-        {
-            _stateManager.InitializeStateForInstrument(instrument);
-            _stateManager.HistoricalMarketProfiles[instrument.SecurityId] = _marketProfileService.GetHistoricalProfiles(instrument.SecurityId);
-            if (!_stateManager.MarketProfiles.ContainsKey(instrument.SecurityId))
-            {
-                decimal tickSize = _signalGenerationService.GetTickSize(instrument);
-                var startTime = DateTime.Today.Add(new TimeSpan(9, 15, 0));
-                _stateManager.MarketProfiles[instrument.SecurityId] = new MarketProfile(tickSize, startTime);
-            }
-            LoadIndicatorStateFromStorage(instrument.SecurityId);
-            Task.Run(() => BackfillAndSavePreviousDayProfileAsync(instrument));
-            Task.Run(() => BackfillCurrentDayCandlesAsync(instrument));
-            RunDailyBiasAnalysis(instrument);
-        }
-
+        private void InitializeNewInstrument(DashboardInstrument instrument) { _stateManager.InitializeStateForInstrument(instrument.SecurityId, instrument.DisplayName, instrument.InstrumentType); _stateManager.HistoricalMarketProfiles[instrument.SecurityId] = _marketProfileService.GetHistoricalProfiles(instrument.SecurityId); if (!_stateManager.MarketProfiles.ContainsKey(instrument.SecurityId)) { decimal tickSize = _signalGenerationService.GetTickSize(instrument); var startTime = DateTime.Today.Add(new TimeSpan(9, 15, 0)); _stateManager.MarketProfiles[instrument.SecurityId] = new MarketProfile(tickSize, startTime); } LoadIndicatorStateFromStorage(instrument.SecurityId); Task.Run(() => BackfillAndSavePreviousDayProfileAsync(instrument)); Task.Run(() => BackfillCurrentDayCandlesAsync(instrument)); RunDailyBiasAnalysis(instrument); }
         public List<Candle>? GetCandles(string securityId, TimeSpan timeframe) => _stateManager.GetCandles(securityId, timeframe);
         public void SetNearestExpiryDates(Dictionary<string, string> expiryDates) { foreach (var kvp in expiryDates) { if (DateTime.TryParse(kvp.Value, out var date)) { _nearestExpiryDates[kvp.Key] = date.Date; } } }
         public void SaveIndicatorStates() { if (!IsMarketOpen()) return; var timeframes = new[] { TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15) }; foreach (var securityId in _stateManager.MultiTimeframePriceEmaState.Keys) { foreach (var timeframe in timeframes) { var key = $"{securityId}_{timeframe.TotalMinutes}"; var rsiState = _stateManager.MultiTimeframeRsiState[securityId][timeframe]; var atrState = _stateManager.MultiTimeframeAtrState[securityId][timeframe]; var obvState = _stateManager.MultiTimeframeObvState[securityId][timeframe]; var stateToSave = new IndicatorState { LastRsiAvgGain = rsiState.AvgGain, LastRsiAvgLoss = rsiState.AvgLoss, LastAtr = atrState.CurrentAtr, LastObv = obvState.CurrentObv, LastObvMovingAverage = obvState.CurrentMovingAverage }; _indicatorStateService.UpdateState(key, stateToSave); } } _indicatorStateService.SaveDatabase(); }
